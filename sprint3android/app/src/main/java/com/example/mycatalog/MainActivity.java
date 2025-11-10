@@ -19,14 +19,16 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
 
-        Button navigateButton = findViewById(R.id.btn_navegar);
+        Button navigateButton = findViewById(R.id.boton_navegar);
 
         navigateButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
 
                 Intent intent = new Intent(MainActivity.this, DetailActivity.class);
+
                 startActivity(intent);
+
             }
         });
     }
