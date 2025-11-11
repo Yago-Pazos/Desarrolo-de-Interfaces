@@ -1,35 +1,39 @@
 package com.example.mycatalog;
 
 import android.os.Bundle;
+import android.util.Log;
 
-import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
-import android.widget.Button;
-import android.content.Intent;
-import android.view.View;
+
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+
+import androidx.navigation.NavController;
+import androidx.navigation.fragment.NavHostFragment;
+import androidx.navigation.ui.NavigationUI;
 
 public class MainActivity extends AppCompatActivity {
+
+    private static final String TAG = "MainActivity";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager().findFragmentById(R.id.nav_host_fragment);
+        if (navHostFragment == null) {
+            Log.e(TAG, "NavHostFragment not found (id: nav_host_fragment). Check activity_main.xml");
+            return;
+        }
 
-        Button navigateButton = findViewById(R.id.boton_navegar);
+        NavController navController = navHostFragment.getNavController();
 
-        navigateButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
+        BottomNavigationView bottomNav = findViewById(R.id.bottom_nav);
+        if (bottomNav == null) {
+            Log.e(TAG, "BottomNavigationView not found (id: bottom_nav). Check activity_main.xml");
+            return;
+        }
 
-                Intent intent = new Intent(MainActivity.this, DetailActivity.class);
-
-                startActivity(intent);
-
-            }
-        });
+        NavigationUI.setupWithNavController(bottomNav, navController);
     }
 }
