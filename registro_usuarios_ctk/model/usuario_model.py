@@ -61,16 +61,31 @@ class GestorUsuarios:
 
     def cargar_csv(self, ruta: str = "usuarios.csv"):
         import csv
+        # Intentar abrir el CSV; si no existe, no hacer nada
         try:
             with open(ruta, 'r', encoding='utf-8') as f:
                 reader = csv.reader(f)
-                next(reader, None)  # Saltar cabecera
-                self._usuarios = []
-                for row in reader:
-                    if len(row) == 4:
-                        nombre, edad, genero, avatar = row
-                        self.anadir(Usuario(nombre, int(edad), genero, avatar))
+                # Saltar la cabecera si existe
+                next(reader, None)
+                # Limpiar la lista actual antes de repoblarla
+                self._usuarios.clear()
+                for i, row in enumerate(reader, start=1):
+                    try:
+                        if not row:
+                            continue
+                        if len(row) != 4:
+                            # fila con formato inesperado, la saltamos
+                            continue
+                        nombre, edad_s, genero, avatar = row
+                        edad = int(edad_s)
+                        # Añadir usando validaciones del método anadir
+                        self.anadir(Usuario(nombre, edad, genero, avatar))
+                    except Exception:
+                        # Saltar filas corruptas o con datos inválidos
+                        continue
         except FileNotFoundError:
-            pass  # No hacer nada si no existe
+            # No existe el archivo: nada que cargar
+            return
         except Exception as e:
+            # Propagar errores inesperados para que el controlador los maneje
             raise Exception(f"Error al cargar CSV: {e}")

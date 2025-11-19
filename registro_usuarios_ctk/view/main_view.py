@@ -1,10 +1,19 @@
 import customtkinter as ctk
 from PIL import Image
 from pathlib import Path
+import tkinter
 
 class MainView:
     def __init__(self, master):
         self.master = master
+
+        # --- Menú ---
+        self.menubar = tkinter.Menu(master)
+        master.config(menu=self.menubar)
+        self.menu_archivo = tkinter.Menu(self.menubar, tearoff=0)
+        self.menubar.add_cascade(label="Archivo", menu=self.menu_archivo)
+        # Se pueden añadir más menús (Ayuda) desde el controlador si se desea
+
         # Marco principal
         self.frame = ctk.CTkFrame(master)
         self.frame.pack(fill="both", expand=True, padx=10, pady=10)
@@ -56,10 +65,8 @@ class MainView:
         self.genero_val_label = ctk.CTkLabel(details_frame, text="-", anchor="w")
         self.genero_val_label.grid(row=3, column=1, sticky="w", padx=8)
 
-        lbl_avatar = ctk.CTkLabel(details_frame, text="Avatar:", anchor="w")
-        lbl_avatar.grid(row=4, column=0, sticky="w", pady=8)
-        self.avatar_val_label = ctk.CTkLabel(details_frame, text="-", anchor="w")
-        self.avatar_val_label.grid(row=4, column=1, sticky="w", padx=8)
+        # Eliminada la etiqueta que mostraba el nombre del archivo del avatar
+        # Se muestra únicamente la imagen a través de avatar_image_label
 
         # Barra inferior: estado y botones
         bottom_frame = ctk.CTkFrame(self.frame)
@@ -113,12 +120,11 @@ class MainView:
             self.nombre_val_label.configure(text=usuario.nombre)
             self.edad_val_label.configure(text=str(usuario.edad))
             self.genero_val_label.configure(text=usuario.genero)
-            self.avatar_val_label.configure(text="")
+            # No mostrar el nombre/archivo del avatar en los detalles, solo la imagen
         else:
             self.nombre_val_label.configure(text="-")
             self.edad_val_label.configure(text="-")
             self.genero_val_label.configure(text="-")
-            self.avatar_val_label.configure(text="")
             self.set_avatar_image(None)
 
     def set_avatar_image(self, ctk_image):
@@ -192,10 +198,18 @@ class AddUserView:
         # Actualizar preview cuando cambia la selección
         try:
             # trace_add puede no existir en algunas versiones; usar trace si hace falta
+            def _avatar_trace(var, index, mode):
+                # firma requerida por trace_add: (name, index, mode)
+                try:
+                    self._update_preview()
+                except Exception:
+                    pass
+
             if hasattr(self.avatar_var, 'trace_add'):
-                self.avatar_var.trace_add('write', lambda *_: self._update_preview())
+                self.avatar_var.trace_add('write', _avatar_trace)
             else:
-                self.avatar_var.trace('w', lambda *_: self._update_preview())
+                # trace older versions expect a function taking 3 args as well
+                self.avatar_var.trace('w', _avatar_trace)
         except Exception:
             pass
 

@@ -22,6 +22,16 @@ class AppController:
         self.view = MainView(root)
         self.selected_index = None
 
+        # Conectar menú Archivo con comandos de guardado/carga
+        try:
+            self.view.menu_archivo.add_command(label="Guardar", command=self.guardar_usuarios)
+            self.view.menu_archivo.add_command(label="Cargar", command=self.cargar_usuarios)
+            self.view.menu_archivo.add_separator()
+            self.view.menu_archivo.add_command(label="Salir", command=self.salir)
+        except Exception:
+            # Si por algún motivo la vista no expone el menú, ignorar
+            pass
+
         # Caché de imágenes para evitar GC
         self.avatar_images = {}
 
@@ -36,6 +46,13 @@ class AppController:
             select_cb=self.seleccion_cambiada
         )
 
+        # Cargar datos inicialmente desde CSV si existe
+        try:
+            self.cargar_usuarios()
+        except Exception:
+            # No bloquear la app si hay problemas con el CSV
+            pass
+
         self.refrescar_lista()
         # Seleccionar automáticamente el primer usuario para que el avatar visible sea el de los ejemplos subidos
         try:
@@ -44,6 +61,29 @@ class AppController:
                 self.seleccion_cambiada(0)
         except Exception:
             pass
+
+    def guardar_usuarios(self):
+        try:
+            ruta = str(self.BASE_DIR / 'usuarios.csv')
+            self.model.guardar_csv(ruta)
+            messagebox.showinfo('Guardar', f'Usuarios guardados en {ruta}')
+            self.view.set_estado('Guardado correcto')
+        except Exception as e:
+            messagebox.showerror('Error', f'No se pudo guardar: {e}')
+            self.view.set_estado('Error al guardar')
+
+    def cargar_usuarios(self):
+        try:
+            ruta = str(self.BASE_DIR / 'usuarios.csv')
+            self.model.cargar_csv(ruta)
+            # Tras cargar, re-asignar avatares disponibles si es necesario
+            self._assign_example_avatars()
+            self.refrescar_lista()
+            messagebox.showinfo('Cargar', 'Usuarios cargados correctamente')
+            self.view.set_estado('Cargado desde CSV')
+        except Exception as e:
+            messagebox.showerror('Error', f'No se pudo cargar: {e}')
+            self.view.set_estado('Error al cargar')
 
     def _ensure_avatar_files(self):
         # Crear carpeta assets si no existe y generar imágenes de avatar simples si faltan
