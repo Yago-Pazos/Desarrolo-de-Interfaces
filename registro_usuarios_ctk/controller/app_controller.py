@@ -4,6 +4,8 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 import customtkinter as ctk
 from tkinter import messagebox
+import threading
+import time
 
 class AppController:
     def __init__(self, root):
@@ -35,6 +37,12 @@ class AppController:
         # Caché de imágenes para evitar GC
         self.avatar_images = {}
 
+        # Auto-guardado
+        self.autosave_thread = None
+        self.autosave_stop_event = threading.Event()
+        self.autosave_interval = 10  # segundos
+        self.autosave_enabled = False
+
         # Conectar callbacks (incluyendo doble-clic)
         self.view.set_callbacks(
             add_cb=self.alta_usuario_modal,
@@ -46,6 +54,12 @@ class AppController:
             select_cb=self.seleccion_cambiada,
             double_click_cb=self.editar_usuario_modal
         )
+
+        # Conectar botón de auto-guardado
+        try:
+            self.view.autosave_button.configure(command=self.toggle_autosave)
+        except Exception:
+            pass
 
         # Cargar datos inicialmente desde CSV si existe
         try:
@@ -329,4 +343,55 @@ class AppController:
                 self.view.set_estado(f"Error: {e}")
 
     def salir(self):
+        # Parar auto-guardado si está activo
+        try:
+            if self.autosave_enabled:
+                self.autosave_stop_event.set()
+                # esperar pequeño tiempo a que el hilo termine
+                if self.autosave_thread is not None:
+                    self.autosave_thread.join(timeout=2)
+        except Exception:
+            pass
         self.root.quit()
+
+    # ---------------- Auto-guardado con hilo ----------------
+    def toggle_autosave(self):
+        if not self.autosave_enabled:
+            # iniciar hilo
+            self.autosave_stop_event.clear()
+            self.autosave_thread = threading.Thread(target=self._autosave_loop, daemon=True)
+            self.autosave_thread.start()
+            self.autosave_enabled = True
+            # actualizar UI
+            try:
+                self.view.autosave_button.configure(text=f"Auto-guardar: ON ({self.autosave_interval}s)")
+            except Exception:
+                pass
+            self.view.set_estado('Auto-guardado activado')
+        else:
+            # parar hilo
+            self.autosave_stop_event.set()
+            self.autosave_enabled = False
+            try:
+                self.view.autosave_button.configure(text="Auto-guardar: OFF")
+            except Exception:
+                pass
+            self.view.set_estado('Auto-guardado desactivado')
+
+    def _autosave_loop(self):
+        # Loop que guarda cada self.autosave_interval segundos mientras no se pida detener
+        while not self.autosave_stop_event.is_set():
+            # Esperar con capacidad de interrupción
+            for _ in range(self.autosave_interval):
+                if self.autosave_stop_event.is_set():
+                    break
+                time.sleep(1)
+            if self.autosave_stop_event.is_set():
+                break
+            try:
+                ruta = str(self.BASE_DIR / 'usuarios.csv')
+                self.model.guardar_csv(ruta)
+                # comunicar resultado a la UI usando after para no tocar widgets desde el hilo
+                self.root.after(0, lambda: self.view.set_estado(f'Auto-guardado: {time.strftime("%H:%M:%S")}'))
+            except Exception as e:
+                self.root.after(0, lambda: self.view.set_estado(f'Error auto-guardado: {e}'))

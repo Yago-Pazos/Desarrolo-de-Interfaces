@@ -95,8 +95,13 @@ class MainView:
         self.status_label = ctk.CTkLabel(bottom_frame, text="Listo", anchor="w")
         self.status_label.grid(row=0, column=0, sticky="w", padx=12, pady=8)
 
+        # Indicador / botón de Auto-guardado
+        self.autosave_button = ctk.CTkButton(bottom_frame, text="Auto-guardar: OFF", width=180)
+        self.autosave_button.grid(row=0, column=1, sticky="e", padx=(6,8), pady=8)
+
+        # Salir a la derecha
         self.exit_button = ctk.CTkButton(bottom_frame, text="Salir")
-        self.exit_button.grid(row=0, column=1, sticky="e", padx=12, pady=8)
+        self.exit_button.grid(row=0, column=2, sticky="e", padx=12, pady=8)
 
         # Botones de acción (ocultos en la parte baja izquierda dentro left_card)
         self.button_frame = ctk.CTkFrame(self.left_card)
