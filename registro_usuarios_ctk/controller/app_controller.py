@@ -35,7 +35,7 @@ class AppController:
         # Caché de imágenes para evitar GC
         self.avatar_images = {}
 
-        # Conectar callbacks
+        # Conectar callbacks (incluyendo doble-clic)
         self.view.set_callbacks(
             add_cb=self.alta_usuario_modal,
             edit_cb=self.editar_usuario_modal,
@@ -43,7 +43,8 @@ class AppController:
             exit_cb=self.salir,
             search_cb=self.aplicar_filtros,
             genero_cb=self.aplicar_filtros,
-            select_cb=self.seleccion_cambiada
+            select_cb=self.seleccion_cambiada,
+            double_click_cb=self.editar_usuario_modal
         )
 
         # Cargar datos inicialmente desde CSV si existe
@@ -226,9 +227,97 @@ class AppController:
         except Exception as e:
             messagebox.showerror("Error al añadir", str(e))
 
-    def editar_usuario_modal(self):
-        # Por ahora no implementado en esta fase
-        pass
+    def editar_usuario_modal(self, indice=None):
+        # Si no se pasa índice, usar el seleccionado actual
+        try:
+            usuarios_filtrados = self.aplicar_filtros_logic()
+            if indice is None:
+                # editar desde botón: usar el seleccionado en el modelo
+                model_idx = self.selected_index
+                if model_idx is None:
+                    return
+                # calcular índice relativo en la lista filtrada
+                try:
+                    # usuarios_filtrados contiene objetos Usuario, encontrar el relativo
+                    usuario_rel = next((u for u in usuarios_filtrados if u is self.model.listar()[model_idx]), None)
+                    if usuario_rel is None:
+                        # si no está en la vista filtrada, añadimos edición directa por modelo_idx
+                        relative_idx = None
+                    else:
+                        relative_idx = usuarios_filtrados.index(usuario_rel)
+                except Exception:
+                    relative_idx = None
+            else:
+                if not (0 <= indice < len(usuarios_filtrados)):
+                    return
+                relative_idx = indice
+                # obtener índice real en el modelo
+                model_idx = self.model.listar().index(usuarios_filtrados[indice])
+
+            usuario = self.model.listar()[model_idx]
+            # Preparar lista de avatars disponibles en assets
+            avatar_files = [f.name for f in self.ASSETS_PATH.iterdir() if f.is_file() and f.suffix.lower() in ['.png', '.jpg', '.jpeg', '.gif']]
+            if not avatar_files:
+                avatar_files = [""]
+            initial = {"nombre": usuario.nombre, "edad": usuario.edad, "genero": usuario.genero, "avatar": usuario.avatar}
+            add_view = AddUserView(self.root, avatar_options=avatar_files, assets_path=self.ASSETS_PATH, initial_data=initial)
+            # Conectar el botón guardar para actualizar ese usuario
+            add_view.guardar_button.configure(command=lambda: self.actualizar_usuario(add_view, relative_idx))
+        except Exception as e:
+            messagebox.showerror("Error", f"No se puede editar: {e}")
+
+    def actualizar_usuario(self, add_view, indice_relativo):
+        data = add_view.get_data()
+        nombre = data.get('nombre', '')
+        edad_s = data.get('edad', '')
+        genero = data.get('genero', 'otro')
+        avatar = data.get('avatar', '')
+
+        if not nombre:
+            messagebox.showerror("Error", "El nombre no puede estar vacío")
+            return
+        try:
+            edad = int(edad_s)
+        except Exception:
+            messagebox.showerror("Error", "Edad debe ser un número entero")
+            return
+
+        if genero not in ['masculino', 'femenino', 'otro']:
+            genero = 'otro'
+
+        try:
+            usuarios_filtrados = self.aplicar_filtros_logic()
+            if indice_relativo is None:
+                # No se proporcionó índice relativo (edición directa por botón desde modelo)
+                if self.selected_index is None:
+                    messagebox.showerror("Error", "No hay usuario seleccionado para actualizar")
+                    return
+                model_idx = self.selected_index
+            else:
+                if not (0 <= indice_relativo < len(usuarios_filtrados)):
+                    messagebox.showerror("Error", "Índice inválido al actualizar")
+                    return
+                # Obtener índice real en el modelo
+                model_idx = self.model.listar().index(usuarios_filtrados[indice_relativo])
+            actualizado = Usuario(nombre, edad, genero, avatar)
+            self.model.actualizar(model_idx, actualizado)
+            self.refrescar_lista()
+            self.view.set_estado("Usuario actualizado")
+            add_view.window.destroy()
+            # Intentar seleccionar en la vista el usuario actualizado
+            try:
+                # Recalcular filtrados y encontrar posición relativa
+                nuevos_filtrados = self.aplicar_filtros_logic()
+                # encontrar el nuevo usuario en la lista filtrada por identidad
+                for i, u in enumerate(nuevos_filtrados):
+                    if u is actualizado:
+                        # seleccionar relativo
+                        self.seleccion_cambiada(i)
+                        break
+            except Exception:
+                pass
+        except Exception as e:
+             messagebox.showerror("Error al actualizar", str(e))
 
     def eliminar_usuario(self):
         if self.selected_index is not None:

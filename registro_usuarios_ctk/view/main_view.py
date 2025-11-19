@@ -19,11 +19,29 @@ class MainView:
         self.frame.pack(fill="both", expand=True, padx=10, pady=10)
         self.frame.grid_columnconfigure(0, weight=1)
         self.frame.grid_columnconfigure(1, weight=1)
-        self.frame.grid_rowconfigure(0, weight=1)
+        # Reservar filas: 0 header, 1 contenido, 2 bottom
+        self.frame.grid_rowconfigure(1, weight=1)
 
-        # Columna izquierda: tarjeta Usuarios
+        # --- HEADER: búsqueda y filtros ---
+        header_frame = ctk.CTkFrame(self.frame, fg_color="transparent")
+        header_frame.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0,8))
+        header_frame.grid_columnconfigure(1, weight=1)
+
+        lbl_buscar = ctk.CTkLabel(header_frame, text="Buscar:")
+        lbl_buscar.grid(row=0, column=0, sticky="w", padx=(4,6))
+        self.search_var = ctk.StringVar()
+        self.search_entry = ctk.CTkEntry(header_frame, textvariable=self.search_var, width=220)
+        self.search_entry.grid(row=0, column=1, sticky="w", padx=(0,12))
+
+        lbl_genero = ctk.CTkLabel(header_frame, text="Género:")
+        lbl_genero.grid(row=0, column=2, sticky="w", padx=(6,6))
+        self.genero_var = ctk.StringVar(value="todos")
+        self.genero_menu = ctk.CTkOptionMenu(header_frame, values=["todos", "masculino", "femenino", "otro"], variable=self.genero_var, width=140)
+        self.genero_menu.grid(row=0, column=3, sticky="w")
+
+        # Columna izquierda: tarjeta Usuarios (mover a row=1)
         self.left_card = ctk.CTkFrame(self.frame, corner_radius=8)
-        self.left_card.grid(row=0, column=0, sticky="nsew", padx=(0, 8), pady=8)
+        self.left_card.grid(row=1, column=0, sticky="nsew", padx=(0, 8), pady=8)
         self.left_card.grid_rowconfigure(1, weight=1)
         title_left = ctk.CTkLabel(self.left_card, text="Usuarios", font=ctk.CTkFont(size=18))
         title_left.grid(row=0, column=0, pady=(12, 6))
@@ -33,9 +51,9 @@ class MainView:
         self.scrollable_frame.grid(row=1, column=0, sticky="nsew", padx=12, pady=8)
         self.usuario_buttons = []
 
-        # Columna derecha: tarjeta Detalles
+        # Columna derecha: tarjeta Detalles (mover a row=1)
         self.right_card = ctk.CTkFrame(self.frame, corner_radius=8)
-        self.right_card.grid(row=0, column=1, sticky="nsew", padx=(8, 0), pady=8)
+        self.right_card.grid(row=1, column=1, sticky="nsew", padx=(8, 0), pady=8)
         self.right_card.grid_rowconfigure(0, weight=0)
         self.right_card.grid_rowconfigure(1, weight=1)
 
@@ -68,9 +86,9 @@ class MainView:
         # Eliminada la etiqueta que mostraba el nombre del archivo del avatar
         # Se muestra únicamente la imagen a través de avatar_image_label
 
-        # Barra inferior: estado y botones
+        # Barra inferior: estado y botones (mover a row=2)
         bottom_frame = ctk.CTkFrame(self.frame)
-        bottom_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(0,10))
+        bottom_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=(0,10))
         bottom_frame.grid_columnconfigure(0, weight=1)
         bottom_frame.grid_columnconfigure(1, weight=0)
 
@@ -90,24 +108,30 @@ class MainView:
         self.delete_button = ctk.CTkButton(self.button_frame, text="Eliminar", state="disabled")
         self.delete_button.pack(side="left", padx=5)
 
-        # Variables y callbacks
-        self.search_var = ctk.StringVar()
-        self.genero_var = ctk.StringVar(value="todos")
-
         # Cache de imágenes en la vista (opcional)
         self.avatar_images = {}
 
-        # Callback placeholder (será reemplazado por set_callbacks)
+        # Callback placeholders (serán reemplazados por set_callbacks)
         self.on_usuario_select = lambda idx: None
+        self.on_usuario_double_click = lambda idx: None
 
     def set_lista(self, usuarios):
         # Limpiar botones existentes
         for btn in self.usuario_buttons:
-            btn.destroy()
+            try:
+                btn.destroy()
+            except Exception:
+                pass
         self.usuario_buttons = []
         # Añadir nuevos botones
         for i, u in enumerate(usuarios):
             btn = ctk.CTkButton(self.scrollable_frame, text=f"{u.nombre}", command=lambda idx=i: self.on_usuario_select(idx), width=300)
+            # Bind doble-clic para edición (pasa índice relativo a la lista filtrada)
+            try:
+                btn.bind("<Double-Button-1>", lambda e, idx=i: self.on_usuario_double_click(idx))
+            except Exception:
+                # Si bind falla, ignorar
+                pass
             btn.pack(fill="x", padx=8, pady=6)
             self.usuario_buttons.append(btn)
 
@@ -140,19 +164,45 @@ class MainView:
     def set_estado(self, texto):
         self.status_label.configure(text=texto)
 
-    def set_callbacks(self, add_cb, edit_cb, delete_cb, exit_cb, search_cb, genero_cb, select_cb):
+    def set_callbacks(self, add_cb, edit_cb, delete_cb, exit_cb, search_cb, genero_cb, select_cb, double_click_cb):
         self.add_button.configure(command=add_cb)
         self.edit_button.configure(command=edit_cb)
         self.delete_button.configure(command=delete_cb)
         self.exit_button.configure(command=exit_cb)
-        # Los filtros en esta vista están controlados por el controlador; si se añaden widgets de búsqueda, se deben conectar aquí
-        self.search_var.trace_add("write", lambda _1, _2, _3: search_cb()) if hasattr(self.search_var, 'trace_add') else None
-        self.genero_var.trace_add("write", lambda _1, _2, _3: genero_cb()) if hasattr(self.genero_var, 'trace_add') else None
+        # Conectar filtros: trace_add invoca search_cb/genero_cb dinámicamente
+        def _search_trace(name, index, mode):
+            try:
+                search_cb()
+            except Exception:
+                pass
+
+        def _genero_trace(name, index, mode):
+            try:
+                genero_cb()
+            except Exception:
+                pass
+
+        if hasattr(self.search_var, 'trace_add'):
+            self.search_var.trace_add("write", _search_trace)
+        else:
+            try:
+                self.search_var.trace('w', _search_trace)
+            except Exception:
+                pass
+        if hasattr(self.genero_var, 'trace_add'):
+            self.genero_var.trace_add("write", _genero_trace)
+        else:
+            try:
+                self.genero_var.trace('w', _genero_trace)
+            except Exception:
+                pass
+
         self.on_usuario_select = select_cb
+        self.on_usuario_double_click = double_click_cb
 
 
 class AddUserView:
-    def __init__(self, master, avatar_options=None, assets_path: Path = None):
+    def __init__(self, master, avatar_options=None, assets_path: Path = None, initial_data: dict = None):
         self.window = ctk.CTkToplevel(master)
         self.window.title("Añadir Nuevo Usuario")
         self.window.geometry("360x460")
@@ -197,7 +247,6 @@ class AddUserView:
 
         # Actualizar preview cuando cambia la selección
         try:
-            # trace_add puede no existir en algunas versiones; usar trace si hace falta
             def _avatar_trace(var, index, mode):
                 # firma requerida por trace_add: (name, index, mode)
                 try:
@@ -221,6 +270,22 @@ class AddUserView:
         self.guardar_button.pack(pady=(6, 6), ipadx=10)
         self.cancelar_button = ctk.CTkButton(self.window, text="Cancelar", command=self.window.destroy)
         self.cancelar_button.pack(pady=(0, 12), ipadx=10)
+
+        # Si vienen datos iniciales, prellenar el formulario
+        if initial_data:
+            try:
+                self.nombre_entry.insert(0, initial_data.get('nombre', ''))
+                self.edad_entry.insert(0, str(initial_data.get('edad', '')))
+                self.genero_var.set(initial_data.get('genero', 'otro'))
+                avatar_val = initial_data.get('avatar', '')
+                if avatar_val:
+                    self.avatar_var.set(avatar_val)
+                    # actualizar preview
+                    self._update_preview()
+                # Cambiar texto del botón guardar cuando es edición
+                self.guardar_button.configure(text="Guardar Cambios")
+            except Exception:
+                pass
 
     def _update_preview(self):
         val = self.avatar_var.get()
